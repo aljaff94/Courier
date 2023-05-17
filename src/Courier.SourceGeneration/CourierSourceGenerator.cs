@@ -13,13 +13,20 @@ public class CourierSourceGenerator : ISourceGenerator
     {
         if (!Debugger.IsAttached)
         {
-            //Debugger.Launch();
+            // Debugger.Launch();
         }
+        
         context.RegisterForSyntaxNotifications(() => new HandlerSyntaxReceiver());
     }
 
     public void Execute(GeneratorExecutionContext context)
     {
+        if (!context.Compilation.ReferencedAssemblyNames.Any(ai => ai.Name.Equals("Courier.Contracts", StringComparison.OrdinalIgnoreCase)))
+        {
+            // context.ReportDiagnostic();
+            return;
+        }
+        
         var namespaces = new List<string>();
         var servicesSb = new StringBuilder();
         var appSb = new StringBuilder();
