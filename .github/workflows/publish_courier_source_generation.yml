@@ -1,4 +1,4 @@
-name: publish to nuget
+name: publish courier source generation to nuget
 on:
   push:
     branches:
