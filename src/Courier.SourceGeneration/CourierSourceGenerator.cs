@@ -13,7 +13,7 @@ public class CourierSourceGenerator : ISourceGenerator
     {
         if (!Debugger.IsAttached)
         {
-            // Debugger.Launch();
+            //Debugger.Launch();
         }
 
         context.RegisterForSyntaxNotifications(() => new HandlerSyntaxReceiver());
@@ -120,6 +120,33 @@ public class CourierSourceGenerator : ISourceGenerator
             var routeTemplate = handlerAttribute?.ArgumentList?.Arguments[1]
                 ?.Expression.ToString() ?? "/";
 
+            var endpointName = handlerAttribute?.ArgumentList?.Arguments.FirstOrDefault(x => x.NameEquals?.Name.ToString() == "Name")
+                ?.Expression.ToString();
+
+            var endpointDescription = handlerAttribute?.ArgumentList?.Arguments.FirstOrDefault(x => x.NameEquals?.Name.ToString() == "Description")
+                ?.Expression.ToString();
+
+            var endpointSummary  = handlerAttribute?.ArgumentList?.Arguments.FirstOrDefault(x => x.NameEquals?.Name.ToString() == "Summary")
+                ?.Expression.ToString();
+
+            var endpointTags = handlerAttribute?.ArgumentList?.Arguments.FirstOrDefault(x => x.NameEquals?.Name.ToString() == "Tags")
+                ?.Expression.ToString();
+
+            var useOpenApi = handlerAttribute?.ArgumentList?.Arguments.FirstOrDefault(x => x.NameEquals?.Name.ToString() == "UseOpenApi")
+                ?.Expression.ToString();
+
+            // select produces response type attribute
+            var producesResponseTypeAttr = handler.AttributeLists
+                .SelectMany(al => al.Attributes)
+                .Where(a => a.Name.ToString() == "ProducesResponseType")
+                .Select(x => new
+                {
+                    StatusCode = x.ArgumentList?.Arguments[1]
+                        ?.Expression.ToString(),
+                    Type = x.ArgumentList?.Arguments[0]
+                        ?.Expression.ToString()
+                });
+
             // check if AllowAnonymous attribute is present on handler class
             var isAllowAnonymous = handler.AttributeLists
                 .SelectMany(al => al.Attributes)
@@ -212,28 +239,48 @@ public class CourierSourceGenerator : ISourceGenerator
 
             if (isCommandHandler && idType is null)
             {
-                appSb.Append($"app.Map{httpMethod}({routeTemplate}, {attrSb}({signature}, [FromServices] {handlerName} handler) => handler.HandleAsync(request, ctx));");
+                appSb.Append($"\t\t\tapp.Map{httpMethod}({routeTemplate}, {attrSb}({signature}, [FromServices] {handlerName} handler) => handler.HandleAsync(request, ctx))");
             }
 
             if (isCommandHandler && idType is not null)
             {
-                appSb.Append($"app.Map{httpMethod}({routeTemplate}, {attrSb}({signature}, [FromServices] {handlerName} handler) => handler.HandleAsync(id, request, ctx));");
+                appSb.Append($"\t\t\tapp.Map{httpMethod}({routeTemplate}, {attrSb}({signature}, [FromServices] {handlerName} handler) => handler.HandleAsync(id, request, ctx))");
             }
 
             if (isQueryHandler && idType is null)
             {
-                appSb.Append($"app.Map{httpMethod}({routeTemplate}, {attrSb}({signature}, [FromServices] {handlerName} handler) => handler.HandleAsync(ctx));");
+                appSb.Append($"\t\t\tapp.Map{httpMethod}({routeTemplate}, {attrSb}({signature}, [FromServices] {handlerName} handler) => handler.HandleAsync(ctx))");
 
             }
 
             if (isQueryHandler && idType is not null)
             {
-                appSb.Append($"app.Map{httpMethod}({routeTemplate}, {attrSb}({signature}, [FromServices] {handlerName} handler) => handler.HandleAsync(id, ctx));");
+                appSb.Append($"\t\t\tapp.Map{httpMethod}({routeTemplate}, {attrSb}({signature}, [FromServices] {handlerName} handler) => handler.HandleAsync(id, ctx))");
             }
+
+            if(endpointName is not null)
+                appSb.Append($"\n\t\t\t\t.WithName({endpointName})");
+            if(endpointDescription is not null)
+                appSb.Append($"\n\t\t\t\t.WithDescription({endpointDescription.Replace("\n", "\n\t\t\t\t")})");
+            if(endpointSummary is not null)
+                appSb.Append($"\n\t\t\t\t.WithSummary({endpointSummary.Replace("\n", "\n\t\t\t\t")})");
+            if (endpointTags is not null)
+                appSb.Append($"\n\t\t\t\t.WithTags({endpointTags})");
+
+            foreach (var attr in producesResponseTypeAttr)
+            {
+                appSb.Append($"\n\t\t\t\t.Produces({attr.StatusCode}, {attr.Type})");
+            }
+
+            if (useOpenApi?.ToLower() == "true")
+                appSb.Append($"\n\t\t\t\t.WithOpenApi()");
+
+
+            appSb.Append(";");
 
             appSb.AppendLine();
 
-            servicesSb.AppendLine($"services.AddTransient<{handlerName}>();");
+            servicesSb.AppendLine($"\t\t\tservices.AddTransient<{handlerName}>();");
 
         }
 
@@ -249,13 +296,13 @@ public class CourierSourceGenerator : ISourceGenerator
             {
                 public static IServiceCollection AddCourier(this IServiceCollection services)
                 {
-                    {{servicesSb}}
+        {{servicesSb}}
                     return services;
                 }
 
                 public static WebApplication UseCourier(this WebApplication app)
                 {
-                    {{appSb}}
+        {{appSb}}
                     return app;
                 }
             }
